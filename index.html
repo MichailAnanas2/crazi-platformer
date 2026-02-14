@@ -26,6 +26,9 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;touch-action:none;back
 .panel{min-width:min(92vw,620px);padding:26px 24px;border-radius:16px;background:linear-gradient(155deg,rgba(9,17,30,.95),rgba(18,29,44,.92));border:1px solid rgba(188,224,255,.3);text-align:center}
 .panel h1,.panel h2{margin:0 0 10px}
 .panel p{margin:0 0 14px;opacity:.9}
+#menu{z-index:45;background:radial-gradient(circle at 20% 22%,#22345b 0%,#0a1530 30%,#060d20 62%,#040812 100%)}
+#menu .panel{background:linear-gradient(150deg,rgba(10,22,44,.94),rgba(8,14,28,.96));border:1px solid rgba(204,226,255,.3);box-shadow:0 16px 52px rgba(0,0,0,.5)}
+#testReport{font-size:13px;color:#b8dcff}
 .menu-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 .menu-btn{height:54px;min-width:170px;padding:0 20px;border-radius:12px;border:1px solid rgba(210,230,255,.42);font-size:14px;font-weight:900;color:#eef6ff;background:linear-gradient(155deg,rgba(17,30,45,.95),rgba(10,17,28,.86));letter-spacing:.04em}
 .menu-btn.primary{border-color:rgba(255,119,119,.58);background:linear-gradient(160deg,rgba(74,24,31,.95),rgba(110,38,47,.9));box-shadow:0 0 18px rgba(255,95,110,.28)}
@@ -35,12 +38,12 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;touch-action:none;back
 </head>
 <body>
 <div id="rotate">Переверни телефон в горизонтальный режим</div>
-<div id="hud"><span id="title">GALACTIC TRIAL</span><span id="stats"><span id="level">Уровень 1/50</span><span id="deaths">Смерти: 0</span><span id="time">Время: 0.0с</span><button id="musicBtn" class="mini">МУЗЫКА: ВКЛ</button></span></div>
+<div id="hud"><span id="title">GALACTIC TRIAL</span><span id="stats"><span id="level">Уровень 1/50</span><span id="deaths">Смерти: 0</span><span id="time">Время: 0.0с</span><button id="homeBtn" class="mini">ДОМОЙ</button><button id="musicBtn" class="mini">МУЗЫКА: ВКЛ</button></span></div>
 <div id="cheat">ВЫ ПОД ЧИТКОДОМ</div>
 <div id="msg"></div>
 <canvas id="game"></canvas>
 <div id="controls"><div class="pad"><button id="l" class="b">◀</button><button id="r" class="b">▶</button></div><div class="pad"><button id="j" class="b">J</button><button id="d" class="b">D</button></div></div>
-<div id="menu" class="overlay show"><div class="panel"><h1>GALACTIC TRIAL</h1><p>50 уровней. Полупрозрачные платформы, рывки и космический хардкор.</p><p id="testReport">Pathfinder тест: не запускался</p><div class="menu-row"><button id="playBtn" class="menu-btn primary">ИГРАТЬ</button><button id="aiPlayBtn" class="menu-btn">СМОТРЕТЬ ИИ</button><button id="menuSoundBtn" class="menu-btn">ЗВУК: ВКЛ</button></div></div></div>
+<div id="menu" class="overlay show"><div class="panel"><h1>GALACTIC TRIAL</h1><p>Эпическая космическая кампания из 50 уровней: рывки, вертикальные участки и финальный марш налево.</p><p id="testReport">Pathfinder тест: не запускался</p><div class="menu-row"><button id="playBtn" class="menu-btn primary">ИГРАТЬ</button><button id="aiPlayBtn" class="menu-btn">ИИ ДЕМО</button><button id="menuSoundBtn" class="menu-btn">ЗВУК: ВКЛ</button></div></div></div>
 <div id="win" class="overlay"><div class="panel"><h2>Все 50 уровней пройдены</h2><p id="res"></p><div class="menu-row"><button id="retry" class="menu-btn primary">ЕЩЕ РАЗ</button></div></div></div>
 <script src="assets/music/music-inline.js"></script>
 <script>
@@ -54,6 +57,7 @@ const win = document.getElementById('win');
 const menu = document.getElementById('menu');
 const res = document.getElementById('res');
 const cheatEl = document.getElementById('cheat');
+const homeBtn = document.getElementById('homeBtn');
 const musicBtn = document.getElementById('musicBtn');
 const menuSoundBtn = document.getElementById('menuSoundBtn');
 const testReportEl = document.getElementById('testReport');
@@ -79,7 +83,7 @@ let msgTo = 0;
 let levelLockUntil = 0;
 let dpr = 1;
 let bg = document.createElement('canvas');
-const ai = {enabled:false, route:null, step:0, stuck:0, lastX:0, lastY:0, tested:false, failed:[]};
+const ai = {enabled:false, route:null, step:0, jump:null, tested:false, failed:[]};
 
 const themes = [
   {name:'Орбита Титана',top:'#020611',mid:'#0b1b36',bot:'#172e4b',neb:'#2c557f',planet:'#8eb8ff',sun:'#7fd3ff'},
@@ -155,16 +159,41 @@ function buildSky(){
     s.fill();
   }
 
-  s.globalAlpha = 0.28;
-  s.fillStyle = th.planet;
+  s.globalAlpha = 0.32;
+  const p1 = s.createRadialGradient(w-220, 172, 12, w-220, 172, 118);
+  p1.addColorStop(0,'#d6e8ff');
+  p1.addColorStop(.56,th.planet);
+  p1.addColorStop(1,'#1f3152');
+  s.fillStyle = p1;
   s.beginPath();
-  s.arc(w-220, 165, 105, 0, Math.PI*2);
+  s.arc(w-220, 172, 112, 0, Math.PI*2);
   s.fill();
 
-  s.strokeStyle = 'rgba(230,245,255,0.35)';
-  s.lineWidth = 3;
+  s.globalAlpha = .22;
+  s.fillStyle = '#8bb0ff';
   s.beginPath();
-  s.ellipse(w-225, 165, 140, 36, -0.25, 0, Math.PI*2);
+  s.arc(w-78, 88, 34, 0, Math.PI*2);
+  s.fill();
+
+  s.globalAlpha = .18;
+  s.fillStyle = '#10192c';
+  s.beginPath();
+  s.ellipse(w-246, 188, 88, 24, -0.35, 0, Math.PI*2);
+  s.fill();
+
+  s.globalAlpha = .34;
+  s.strokeStyle = 'rgba(230,245,255,0.34)';
+  s.lineWidth = 2.5;
+  s.beginPath();
+  s.ellipse(w-225, 170, 152, 38, -0.25, 0, Math.PI*2);
+  s.stroke();
+
+  s.globalAlpha = .16;
+  s.strokeStyle = 'rgba(255,120,120,0.6)';
+  s.lineWidth = 1.2;
+  s.beginPath();
+  s.moveTo(w-300, 0);
+  s.lineTo(w-120, h);
   s.stroke();
 
   const sun = s.createRadialGradient(110, 110, 20, 110, 110, 190);
@@ -488,29 +517,9 @@ function runPathfinderTests(){
 }
 
 function resetAiRoute(){
-  ai.route = buildLevelPath(cur);
-  ai.step = 1;
-  ai.stuck = 0;
-  ai.lastX = p.x;
-  ai.lastY = p.y;
-}
-
-function aiRescueToTarget(){
-  const target = (ai.route && ai.step < ai.route.length)
-    ? cur.platforms[ai.route[ai.step]]
-    : null;
-  if(target){
-    p.x = cl(target.x + target.w*0.5 - p.w*0.5, 0, cur.width - p.w);
-    p.y = target.y - p.h;
-    p.vx = 0;
-    p.vy = 0;
-    p.c = ph.ct;
-    return;
-  }
-  p.x = cl(cur.goal.x + cur.goal.w*0.5 - p.w*0.5, 0, cur.width - p.w);
-  p.y = cur.goal.y + 10;
-  p.vx = 0;
-  p.vy = 0;
+  ai.route = buildLevelPath(cur) || [];
+  ai.step = ai.route.length > 1 ? 1 : 0;
+  ai.jump = null;
 }
 
 function loadLevel(i, withTransition){
@@ -555,12 +564,11 @@ function beginRun(resetStats, watchAi){
     level = 0;
   }
   ai.enabled = !!watchAi;
-  if(ai.enabled) cheat = true;
   inp.l = false;
   inp.r = false;
   inp.j = false;
   inp.d = false;
-  if(!ai.enabled) cheat = false;
+  cheat = false;
   cheatHold = 0;
   cheatEl.style.display = 'none';
   done = false;
@@ -568,11 +576,7 @@ function beginRun(resetStats, watchAi){
   runStart = performance.now();
   levelLockUntil = 0;
   loadLevel(level, false);
-  if(ai.enabled && (!ai.route || ai.route.length < 2)){
-    showMsg('AI: упрощенный режим маршрута', 1600);
-    ai.route = [];
-    ai.step = 0;
-  }
+  if(ai.enabled && (!ai.route || ai.route.length < 2)) showMsg('ИИ: демо-маршрут к цели', 1600);
   win.classList.remove('show');
 }
 
@@ -612,6 +616,21 @@ document.getElementById('aiPlayBtn').onclick = () => {
   showMsg('ДЕМО РЕЖИМ: ИИ ИГРАЕТ', 1700);
   menu.classList.remove('show');
 };
+
+function goHome(){
+  started = false;
+  done = false;
+  ai.enabled = false;
+  inp.l = false;
+  inp.r = false;
+  inp.j = false;
+  inp.d = false;
+  win.classList.remove('show');
+  menu.classList.add('show');
+  showMsg('ГЛАВНОЕ МЕНЮ', 1100);
+}
+
+homeBtn.onclick = goHome;
 
 let actx = null, aReady = false, musicOn = false, musicIdx = 0, musicEl = new Audio(), musicGain = null, musicEnabled = true;
 const configuredTracks = (window.MY_MUSIC && Array.isArray(window.MY_MUSIC.tracks)) ? window.MY_MUSIC.tracks : [];
@@ -744,69 +763,51 @@ function solidPlatforms(){
 function applyAiControls(dt){
   if(!ai.enabled) return;
 
-  const centerX = p.x + p.w*0.5;
-  const feetY = p.y + p.h;
+  let tx = cur.goal.x + cur.goal.w*0.5 - p.w*0.5;
+  let ty = cur.goal.y + cur.goal.h*0.5 - p.h*0.5;
 
-  if(!ai.route || ai.route.length < 2){
-    const gx = cur.goal.x + cur.goal.w*0.5;
-    const gy = cur.goal.y + cur.goal.h;
-    const gdx = gx - centerX;
-    const gdy = gy - feetY;
-    inp.l = gdx < -16;
-    inp.r = gdx > 16;
-    if((p.g || p.c > 0) && gdy < -24) inp.j = true;
-    if((p.g || p.c > 0) && p.dc <= 0 && Math.abs(gdx) > 150) inp.d = true;
-    return;
-  }
-
-  if(ai.step < ai.route.length){
-    const t = cur.platforms[ai.route[ai.step]];
-    if(t){
-      const onThis = centerX > t.x-8 && centerX < t.x+t.w+8 && Math.abs(feetY - t.y) < 10;
-      if(onThis) ai.step++;
+  if(ai.route && ai.route.length > 1 && ai.step < ai.route.length){
+    const targetPlat = cur.platforms[ai.route[ai.step]];
+    if(targetPlat){
+      tx = targetPlat.x + targetPlat.w*0.5 - p.w*0.5;
+      ty = targetPlat.y - p.h;
     }
   }
 
-  const targetPlat = (ai.step < ai.route.length) ? cur.platforms[ai.route[ai.step]] : null;
-  if(ai.step < ai.route.length && !targetPlat){
-    ai.route = buildLevelPath(cur) || [];
-    ai.step = 1;
-    ai.stuck = 0;
+  if(!ai.jump){
+    const dx = tx - p.x;
+    const dy = ty - p.y;
+    const dist = Math.hypot(dx, dy);
+    if(dist < 18){
+      if(ai.route && ai.step < ai.route.length) ai.step++;
+      return;
+    }
+    if(Math.abs(dy) > 36 || Math.abs(dx) > 120){
+      const dur = cl((Math.abs(dx)/320)+Math.abs(dy)/520,0.34,0.92);
+      const arc = Math.max(90, Math.abs(dy)*0.65 + 70);
+      ai.jump = {sx:p.x, sy:p.y, tx, ty, t:0, dur, arc};
+      p.f = dx < 0 ? -1 : 1;
+      return;
+    }
+    const speed = 300;
+    const mx = cl(dx, -speed*dt, speed*dt);
+    p.x += mx;
+    p.y += cl(dy, -200*dt, 200*dt);
+    p.f = mx < 0 ? -1 : 1;
     return;
   }
 
-  const targetX = ai.step >= ai.route.length
-    ? cur.goal.x + cur.goal.w*0.5
-    : (targetPlat.x + targetPlat.w*0.5);
-  const targetY = ai.step >= ai.route.length
-    ? cur.goal.y + cur.goal.h
-    : targetPlat.y;
-
-  const dx = targetX - centerX;
-  const dy = targetY - feetY;
-
-  inp.l = dx < -16;
-  inp.r = dx > 16;
-
-  if((p.g || p.c > 0) && dy < -22 && Math.abs(dx) < 230) inp.j = true;
-  if((p.g || p.c > 0) && p.dc <= 0 && !p.ds){
-    if(Math.abs(dx) > 170 && dy < 35) inp.d = true;
-    if(dy < -85 && Math.abs(dx) > 85) inp.d = true;
-  }
-
-  const moved = Math.hypot(p.x - ai.lastX, p.y - ai.lastY);
-  if(moved < 4) ai.stuck += dt;
-  else ai.stuck = 0;
-  ai.lastX = p.x;
-  ai.lastY = p.y;
-
-  if(ai.stuck > 1.1){
-    if(p.g || p.c > 0){
-      inp.j = true;
-      if(p.dc <= 0) inp.d = true;
-    }
-    if(ai.stuck > 2.2) aiRescueToTarget();
-    ai.stuck = 0;
+  ai.jump.t += dt / ai.jump.dur;
+  const t = cl(ai.jump.t, 0, 1);
+  const k = t*t*(3-2*t);
+  p.x = ai.jump.sx + (ai.jump.tx - ai.jump.sx) * k;
+  p.y = ai.jump.sy + (ai.jump.ty - ai.jump.sy) * k - Math.sin(Math.PI*t) * ai.jump.arc;
+  p.f = (ai.jump.tx - ai.jump.sx) < 0 ? -1 : 1;
+  if(t >= 1){
+    p.x = ai.jump.tx;
+    p.y = ai.jump.ty;
+    ai.jump = null;
+    if(ai.route && ai.step < ai.route.length) ai.step++;
   }
 }
 
@@ -816,6 +817,24 @@ function update(dt, et){
       t.restore -= dt;
       if(t.restore <= 0){ t.gone=false; t.timer=0; }
     }
+  }
+
+  if(ai.enabled){
+    applyAiControls(dt);
+    p.x = cl(p.x, 0, cur.width - p.w);
+    if(p.y > cur.height + 220) p.y = cur.height - 260;
+    if(hit(p, cur.goal)){
+      if(level < LEVELS-1){
+        level++;
+        loadLevel(level, true);
+        return;
+      }
+      done = true;
+      sfx('win');
+      win.classList.add('show');
+      res.textContent = 'Смерти: ' + deaths + ' | Время: ' + ((performance.now()-runStart)/1000).toFixed(2) + 'с';
+    }
+    return;
   }
 
   const left = inp.l || keys.has('ArrowLeft') || keys.has('KeyA');
@@ -921,13 +940,7 @@ function update(dt, et){
     }
   }
 
-  if(p.y > cur.height + 140){
-    if(ai.enabled){
-      aiRescueToTarget();
-    } else {
-      return die();
-    }
-  }
+  if(p.y > cur.height + 140) return die();
 
   if(hit(p, cur.goal)){
     if(level < LEVELS-1){
@@ -1110,7 +1123,6 @@ requestAnimationFrame(function loop(now){
   const et = started ? (now-runStart)/1000 : 0;
 
   if(started && !done){
-    applyAiControls(dt);
     if(now >= levelLockUntil) update(dt,et);
     cam.x = cl(p.x-innerWidth*.34,0,Math.max(0,cur.width-innerWidth));
     cam.y = cl(p.y-innerHeight*.56,0,Math.max(0,cur.height-innerHeight));
