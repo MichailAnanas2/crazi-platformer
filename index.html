@@ -495,6 +495,24 @@ function resetAiRoute(){
   ai.lastY = p.y;
 }
 
+function aiRescueToTarget(){
+  const target = (ai.route && ai.step < ai.route.length)
+    ? cur.platforms[ai.route[ai.step]]
+    : null;
+  if(target){
+    p.x = cl(target.x + target.w*0.5 - p.w*0.5, 0, cur.width - p.w);
+    p.y = target.y - p.h;
+    p.vx = 0;
+    p.vy = 0;
+    p.c = ph.ct;
+    return;
+  }
+  p.x = cl(cur.goal.x + cur.goal.w*0.5 - p.w*0.5, 0, cur.width - p.w);
+  p.y = cur.goal.y + 10;
+  p.vx = 0;
+  p.vy = 0;
+}
+
 function loadLevel(i, withTransition){
   cur = levelGen(i);
   p.x = cur.start.x;
@@ -537,11 +555,12 @@ function beginRun(resetStats, watchAi){
     level = 0;
   }
   ai.enabled = !!watchAi;
+  if(ai.enabled) cheat = true;
   inp.l = false;
   inp.r = false;
   inp.j = false;
   inp.d = false;
-  cheat = false;
+  if(!ai.enabled) cheat = false;
   cheatHold = 0;
   cheatEl.style.display = 'none';
   done = false;
@@ -549,9 +568,10 @@ function beginRun(resetStats, watchAi){
   runStart = performance.now();
   levelLockUntil = 0;
   loadLevel(level, false);
-  if(ai.enabled && !ai.route){
-    showMsg('AI: маршрут не найден', 1600);
-    ai.enabled = false;
+  if(ai.enabled && (!ai.route || ai.route.length < 2)){
+    showMsg('AI: упрощенный режим маршрута', 1600);
+    ai.route = [];
+    ai.step = 0;
   }
   win.classList.remove('show');
 }
@@ -722,10 +742,22 @@ function solidPlatforms(){
 }
 
 function applyAiControls(dt){
-  if(!ai.enabled || !ai.route || !ai.route.length) return;
+  if(!ai.enabled) return;
 
   const centerX = p.x + p.w*0.5;
   const feetY = p.y + p.h;
+
+  if(!ai.route || ai.route.length < 2){
+    const gx = cur.goal.x + cur.goal.w*0.5;
+    const gy = cur.goal.y + cur.goal.h;
+    const gdx = gx - centerX;
+    const gdy = gy - feetY;
+    inp.l = gdx < -16;
+    inp.r = gdx > 16;
+    if((p.g || p.c > 0) && gdy < -24) inp.j = true;
+    if((p.g || p.c > 0) && p.dc <= 0 && Math.abs(gdx) > 150) inp.d = true;
+    return;
+  }
 
   if(ai.step < ai.route.length){
     const t = cur.platforms[ai.route[ai.step]];
@@ -735,12 +767,20 @@ function applyAiControls(dt){
     }
   }
 
+  const targetPlat = (ai.step < ai.route.length) ? cur.platforms[ai.route[ai.step]] : null;
+  if(ai.step < ai.route.length && !targetPlat){
+    ai.route = buildLevelPath(cur) || [];
+    ai.step = 1;
+    ai.stuck = 0;
+    return;
+  }
+
   const targetX = ai.step >= ai.route.length
     ? cur.goal.x + cur.goal.w*0.5
-    : (cur.platforms[ai.route[ai.step]].x + cur.platforms[ai.route[ai.step]].w*0.5);
+    : (targetPlat.x + targetPlat.w*0.5);
   const targetY = ai.step >= ai.route.length
     ? cur.goal.y + cur.goal.h
-    : cur.platforms[ai.route[ai.step]].y;
+    : targetPlat.y;
 
   const dx = targetX - centerX;
   const dy = targetY - feetY;
@@ -748,10 +788,10 @@ function applyAiControls(dt){
   inp.l = dx < -16;
   inp.r = dx > 16;
 
-  if((p.g || p.c > 0) && dy < -30 && Math.abs(dx) < 170) inp.j = true;
+  if((p.g || p.c > 0) && dy < -22 && Math.abs(dx) < 230) inp.j = true;
   if((p.g || p.c > 0) && p.dc <= 0 && !p.ds){
-    if(Math.abs(dx) > 180 && dy < 24) inp.d = true;
-    if(dy < -95 && Math.abs(dx) > 96) inp.d = true;
+    if(Math.abs(dx) > 170 && dy < 35) inp.d = true;
+    if(dy < -85 && Math.abs(dx) > 85) inp.d = true;
   }
 
   const moved = Math.hypot(p.x - ai.lastX, p.y - ai.lastY);
@@ -760,11 +800,12 @@ function applyAiControls(dt){
   ai.lastX = p.x;
   ai.lastY = p.y;
 
-  if(ai.stuck > 1.2){
+  if(ai.stuck > 1.1){
     if(p.g || p.c > 0){
       inp.j = true;
       if(p.dc <= 0) inp.d = true;
     }
+    if(ai.stuck > 2.2) aiRescueToTarget();
     ai.stuck = 0;
   }
 }
@@ -880,7 +921,13 @@ function update(dt, et){
     }
   }
 
-  if(p.y > cur.height + 140) return die();
+  if(p.y > cur.height + 140){
+    if(ai.enabled){
+      aiRescueToTarget();
+    } else {
+      return die();
+    }
+  }
 
   if(hit(p, cur.goal)){
     if(level < LEVELS-1){
