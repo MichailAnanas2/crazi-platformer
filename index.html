@@ -104,6 +104,26 @@ const art = {
   emitter: svg("<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 80 220'><rect x='18' y='0' width='44' height='220' rx='12' fill='#111827'/><rect x='30' y='8' width='20' height='204' rx='8' fill='#2c374a'/></svg>")
 };
 
+const shipSheet = new Image();
+const robotSheet = new Image();
+let shipSheetReady = false;
+let robotSheetReady = false;
+shipSheet.onload = () => shipSheetReady = true;
+robotSheet.onload = () => robotSheetReady = true;
+shipSheet.src = 'assets/ui/ships-user.png';
+robotSheet.src = 'assets/ui/robots-user.png';
+
+const SHIP_FRAMES = [
+  {x:20,y:40,w:500,h:430},
+  {x:530,y:80,w:430,h:350},
+  {x:160,y:470,w:700,h:480}
+];
+const ROBOT_FRAMES = [
+  {x:20,y:270,w:280,h:650},
+  {x:300,y:220,w:430,h:760},
+  {x:700,y:260,w:300,h:620}
+];
+
 const cl = (v,a,b) => Math.max(a,Math.min(b,v));
 const hit = (a,b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
 const chr = (x,y,r,o) => {
@@ -981,6 +1001,17 @@ function update(dt, et){
 }
 
 function drawShip(x,y,s,alpha){
+  if(shipSheetReady){
+    const idx = Math.abs(Math.floor((x + y) / 37)) % SHIP_FRAMES.length;
+    const f = SHIP_FRAMES[idx];
+    const dw = f.w * 0.42 * s;
+    const dh = f.h * 0.42 * s;
+    cx.save();
+    cx.globalAlpha = alpha;
+    cx.drawImage(shipSheet,f.x,f.y,f.w,f.h,x-dw*0.48,y-dh*0.45,dw,dh);
+    cx.restore();
+    return;
+  }
   cx.save();
   cx.translate(x,y);
   cx.scale(s,s);
@@ -1004,6 +1035,17 @@ function drawShip(x,y,s,alpha){
 }
 
 function drawWalker(x,y,scale){
+  if(robotSheetReady){
+    const idx = Math.abs(Math.floor((x + y) / 43)) % ROBOT_FRAMES.length;
+    const f = ROBOT_FRAMES[idx];
+    const dw = f.w * 0.24 * scale;
+    const dh = f.h * 0.24 * scale;
+    cx.save();
+    cx.globalAlpha = 0.78;
+    cx.drawImage(robotSheet,f.x,f.y,f.w,f.h,x-dw*0.5,y-dh,dw,dh);
+    cx.restore();
+    return;
+  }
   cx.save();
   cx.translate(x,y);
   cx.scale(scale,scale);
