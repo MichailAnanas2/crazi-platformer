@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Galactic Trial - Редактор уровней</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#08111d;color:#e6f0ff;font-family:Segoe UI,Arial,sans-serif}
+#app{display:grid;grid-template-columns:320px 1fr;height:100%}
+#side{border-right:1px solid rgba(170,200,240,.25);padding:12px;overflow:auto;background:linear-gradient(180deg,#0a1526,#08101c)}
+#view{position:relative}
+#cv{display:block;width:100%;height:100%}
+h1{font-size:18px;margin:0 0 10px}
+h2{font-size:14px;margin:14px 0 8px;color:#b7cff5}
+.row{display:flex;gap:8px;align-items:center;margin:6px 0}
+.row label{width:54px;font-size:12px;color:#aac3ea}
+input,select,button{border:1px solid rgba(165,198,238,.35);background:#0f2037;color:#e6f0ff;border-radius:8px;padding:7px 8px;font-size:12px}
+input[type="number"]{width:100%}
+button{cursor:pointer}
+button:hover{filter:brightness(1.1)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+#status{position:absolute;left:10px;bottom:10px;padding:7px 10px;border-radius:8px;background:rgba(7,15,26,.8);border:1px solid rgba(170,200,240,.22);font-size:12px}
+.small{font-size:11px;opacity:.85}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="side">
+    <h1>Редактор уровней</h1>
+
+    <h2>Файл уровня</h2>
+    <div class="grid2">
+      <button id="newBtn">Новый</button>
+      <button id="saveBtn">Сохранить JSON</button>
+      <button id="loadBtn">Открыть JSON</button>
+      <button id="saveFsBtn">Сохранить в файл</button>
+    </div>
+    <input id="fileInput" type="file" accept="application/json" style="display:none" />
+
+    <h2>Быстрый старт</h2>
+    <div class="row"><label>Уровень</label><input id="genLevel" type="number" min="1" max="50" value="1" /></div>
+    <button id="genBtn" style="width:100%">Импорт из автогенерации</button>
+
+    <h2>Параметры уровня</h2>
+    <div class="row"><label>Имя</label><input id="lvlName" type="text" value="custom-level" /></div>
+    <div class="row"><label>W</label><input id="lvlW" type="number" min="800" step="10" /></div>
+    <div class="row"><label>H</label><input id="lvlH" type="number" min="700" step="10" /></div>
+    <div class="row"><label>Theme</label><input id="lvlTheme" type="number" min="0" max="5" step="1" /></div>
+
+    <h2>Добавить объект</h2>
+    <div class="grid3">
+      <button data-add="platformSolid">Платф.</button>
+      <button data-add="platformCrumble">Ломк.</button>
+      <button data-add="spike">Шипы</button>
+      <button data-add="laser">Лазер</button>
+      <button data-add="saw">Пила</button>
+      <button data-add="start">Старт</button>
+    </div>
+    <button id="addGoal" style="width:100%;margin-top:8px">Сдвинуть финиш сюда</button>
+    <div class="small" style="margin-top:8px">ЛКМ - выделить/тащить, ПКМ - панорама, колесо - зум</div>
+
+    <h2>Свойства выбранного</h2>
+    <div class="row"><label>Тип</label><input id="selType" type="text" readonly /></div>
+    <div class="row"><label>X</label><input id="pX" type="number" /></div>
+    <div class="row"><label>Y</label><input id="pY" type="number" /></div>
+    <div class="row"><label>W</label><input id="pW" type="number" /></div>
+    <div class="row"><label>H</label><input id="pH" type="number" /></div>
+    <div class="row"><label>R</label><input id="pR" type="number" /></div>
+    <div class="grid2">
+      <button id="applyBtn">Применить</button>
+      <button id="delBtn">Удалить</button>
+    </div>
+  </div>
+
+  <div id="view">
+    <canvas id="cv"></canvas>
+    <div id="status"></div>
+  </div>
+</div>
+
+<script>
+const cv = document.getElementById('cv');
+const cx = cv.getContext('2d');
+const statusEl = document.getElementById('status');
+
+const fileInput = document.getElementById('fileInput');
+const lvlName = document.getElementById('lvlName');
+const lvlW = document.getElementById('lvlW');
+const lvlH = document.getElementById('lvlH');
+const lvlTheme = document.getElementById('lvlTheme');
+const pX = document.getElementById('pX');
+const pY = document.getElementById('pY');
+const pW = document.getElementById('pW');
+const pH = document.getElementById('pH');
+const pR = document.getElementById('pR');
+const selType = document.getElementById('selType');
+
+const BASE_H = 1700;
+const themes = [
+  {top:'#020611',mid:'#0b1b36',bot:'#172e4b'},
+  {top:'#12040a',mid:'#300914',bot:'#58172a'},
+  {top:'#04121f',mid:'#0b2f45',bot:'#134b65'},
+  {top:'#080a11',mid:'#191d28',bot:'#2f3744'},
+  {top:'#04070c',mid:'#0c1322',bot:'#171f33'},
+  {top:'#0b0613',mid:'#200934',bot:'#371355'}
+];
+
+let level = makeBlankLevel();
+let cam = {x:0,y:0,zoom:.46};
+let selected = null;
+let dragging = false;
+let panning = false;
+let dragOff = {x:0,y:0};
+let lastMouse = {x:0,y:0};
+let currentAdd = null;
+let fileHandle = null;
+
+function makeBlankLevel(){
+  return {
+    meta:{name:'custom-level',theme:0},
+    width:4800,
+    height:BASE_H,
+    start:{x:120,y:BASE_H-370},
+    goal:{x:4400,y:BASE_H-380,w:64,h:84},
+    platforms:[{x:0,y:BASE_H-250,w:520,h:22,type:'solid'}],
+    spikes:[],
+    saws:[],
+    lasers:[]
+  };
+}
+
+function rng(s){ return () => ((s=(s*1664525+1013904223)>>>0)/4294967296); }
+function cl(v,a,b){ return Math.max(a,Math.min(b,v)); }
+function spawnPlatform(arr,x,y,w,type){ arr.push({x,y,w,h:22,type,timer:0,gone:false,restore:0}); }
+
+function genForwardLevel(i){
+  const r = rng(3101 + i*517);
+  const width = 4300 + i*180;
+  const height = BASE_H;
+  const out = makeBlankLevel();
+  out.width = width; out.height = height;
+  out.start = {x:120,y:height-370};
+  out.platforms = [];
+  spawnPlatform(out.platforms,0,height-250,520,'solid');
+  let prev = out.platforms[0], cursor = prev.x + prev.w;
+  const segs = 18 + Math.floor(i*0.7), hard = i>24, maxRise = hard?128:112;
+  for(let n=0;n<segs;n++){
+    const gap=104+Math.floor(r()*(hard?124:102)), w=128+Math.floor(r()*90), x=cursor+gap;
+    let y=prev.y+Math.floor((r()-.5)*(hard?178:148));
+    y=cl(y,prev.y-maxRise,prev.y+94); y=cl(y,250,height-310);
+    const type=(n>3&&(n+i)%(hard?4:6)===0)?'crumble':'solid';
+    spawnPlatform(out.platforms,x,y,w,type); prev=out.platforms[out.platforms.length-1]; cursor=x+w;
+  }
+  const finalY = cl(prev.y-26,210,height-330);
+  spawnPlatform(out.platforms,width-430,finalY,360,'solid');
+  out.goal = {x:width-156,y:finalY-84,w:64,h:84};
+  out.spikes=[]; out.saws=[]; out.lasers=[];
+  const groundBands=5+Math.floor(i/5);
+  for(let g=0;g<groundBands;g++){
+    const sx=980+Math.floor(g*(width-1900)/Math.max(1,groundBands));
+    out.spikes.push({x:sx,y:height-268,w:70+Math.floor(r()*90),h:18});
+  }
+  return out;
+}
+
+function genVerticalLevel(i){
+  const r=rng(9103+i*733), out=makeBlankLevel();
+  out.width=2600; out.height=2500; out.start={x:240,y:out.height-300}; out.platforms=[];
+  spawnPlatform(out.platforms,0,out.height-210,620,'solid');
+  let x=340,y=out.height-360,steps=22+Math.floor(i/8);
+  for(let n=0;n<steps;n++){
+    x+=Math.floor((r()-.5)*240); x=cl(x,220,out.width-560); y-=90+Math.floor(r()*42);
+    spawnPlatform(out.platforms,x,y,190+Math.floor(r()*90),(n>3&&n%5===0)?'crumble':'solid');
+  }
+  spawnPlatform(out.platforms,cl(x+40,150,out.width-450),170,320,'solid');
+  const t=out.platforms[out.platforms.length-1];
+  out.goal={x:t.x+t.w-86,y:t.y-84,w:64,h:84};
+  out.spikes=[]; out.saws=[]; out.lasers=[];
+  return out;
+}
+
+function genReverseLevel(i){
+  const r=rng(12997+i*997), out=makeBlankLevel();
+  out.width=6200; out.height=BASE_H; out.start={x:out.width-230,y:out.height-370}; out.platforms=[];
+  spawnPlatform(out.platforms,out.width-640,out.height-250,640,'solid');
+  let prev=out.platforms[0], cursor=prev.x;
+  for(let n=0;n<36;n++){
+    const gap=96+Math.floor(r()*118), w=136+Math.floor(r()*94), x=cursor-gap-w;
+    let y=prev.y+Math.floor((r()-.5)*166); y=cl(y,prev.y-116,prev.y+102); y=cl(y,230,out.height-310);
+    spawnPlatform(out.platforms,x,y,w,(n>2&&n%4===0)?'crumble':'solid');
+    prev=out.platforms[out.platforms.length-1]; cursor=x;
+  }
+  spawnPlatform(out.platforms,56,cl(prev.y-12,210,out.height-330),350,'solid');
+  const t=out.platforms[out.platforms.length-1];
+  out.goal={x:78,y:t.y-84,w:64,h:84};
+  out.spikes=[]; out.saws=[]; out.lasers=[];
+  return out;
+}
+
+function genByIndex(idx){
+  const i = cl(idx-1,0,49);
+  if(i===49) return genReverseLevel(i);
+  if(i%12===5 || i%12===9) return genVerticalLevel(i);
+  return genForwardLevel(i);
+}
+
+function resize(){
+  cv.width = cv.clientWidth;
+  cv.height = cv.clientHeight;
+}
+
+function worldToScreen(x,y){ return {x:(x-cam.x)*cam.zoom,y:(y-cam.y)*cam.zoom}; }
+function screenToWorld(x,y){ return {x:x/cam.zoom+cam.x,y:y/cam.zoom+cam.y}; }
+
+function objectAt(wx,wy){
+  const g = level.goal;
+  if(wx>=g.x&&wx<=g.x+g.w&&wy>=g.y&&wy<=g.y+g.h) return {kind:'goal',index:0};
+  const st={x:level.start.x,y:level.start.y-92,w:42,h:92};
+  if(wx>=st.x&&wx<=st.x+st.w&&wy>=st.y&&wy<=st.y+st.h) return {kind:'start',index:0};
+  for(let i=level.saws.length-1;i>=0;i--){const s=level.saws[i];if((wx-s.cx)*(wx-s.cx)+(wy-s.cy)*(wy-s.cy)<=s.r*s.r)return {kind:'saw',index:i};}
+  for(let i=level.lasers.length-1;i>=0;i--){const l=level.lasers[i];if(wx>=l.x&&wx<=l.x+l.w&&wy>=l.y&&wy<=l.y+l.h)return {kind:'laser',index:i};}
+  for(let i=level.spikes.length-1;i>=0;i--){const s=level.spikes[i];if(wx>=s.x&&wx<=s.x+s.w&&wy>=s.y&&wy<=s.y+s.h)return {kind:'spike',index:i};}
+  for(let i=level.platforms.length-1;i>=0;i--){const p=level.platforms[i];if(wx>=p.x&&wx<=p.x+p.w&&wy>=p.y&&wy<=p.y+p.h)return {kind:'platform',index:i};}
+  return null;
+}
+
+function getSelObj(){
+  if(!selected) return null;
+  if(selected.kind==='start') return level.start;
+  if(selected.kind==='goal') return level.goal;
+  const map={platform:level.platforms,spike:level.spikes,laser:level.lasers,saw:level.saws};
+  return map[selected.kind]?.[selected.index] || null;
+}
+
+function syncLevelFields(){
+  lvlName.value = level.meta?.name || 'custom-level';
+  lvlW.value = Math.round(level.width);
+  lvlH.value = Math.round(level.height);
+  lvlTheme.value = cl(level.meta?.theme||0,0,5);
+}
+
+function syncSelFields(){
+  const o = getSelObj();
+  if(!o){ selType.value=''; pX.value=''; pY.value=''; pW.value=''; pH.value=''; pR.value=''; return; }
+  selType.value = selected.kind + (selected.kind==='platform' ? ' ('+(o.type||'solid')+')' : '');
+  pX.value = Math.round(o.x ?? o.cx ?? 0);
+  pY.value = Math.round(o.y ?? o.cy ?? 0);
+  pW.value = Math.round(o.w ?? 0);
+  pH.value = Math.round(o.h ?? 0);
+  pR.value = Math.round(o.r ?? 0);
+}
+
+function addObject(kind,wx,wy){
+  if(kind==='platformSolid'){ level.platforms.push({x:wx-90,y:wy-11,w:180,h:22,type:'solid'}); selected={kind:'platform',index:level.platforms.length-1}; return; }
+  if(kind==='platformCrumble'){ level.platforms.push({x:wx-90,y:wy-11,w:180,h:22,type:'crumble'}); selected={kind:'platform',index:level.platforms.length-1}; return; }
+  if(kind==='spike'){ level.spikes.push({x:wx-40,y:wy-9,w:80,h:18}); selected={kind:'spike',index:level.spikes.length-1}; return; }
+  if(kind==='laser'){ level.lasers.push({x:wx-8,y:wy-110,w:16,h:220,per:1.2,on:0.6,ph:0}); selected={kind:'laser',index:level.lasers.length-1}; return; }
+  if(kind==='saw'){ level.saws.push({cx:wx,cy:wy,r:24,a:'x',amp:120,sp:2.4,ph:0}); selected={kind:'saw',index:level.saws.length-1}; return; }
+  if(kind==='start'){ level.start.x=wx; level.start.y=wy; selected={kind:'start',index:0}; return; }
+  if(kind==='goal'){ level.goal.x=wx; level.goal.y=wy; selected={kind:'goal',index:0}; return; }
+}
+
+function applySelProps(){
+  const o = getSelObj();
+  if(!o) return;
+  const x = +pX.value || 0, y = +pY.value || 0, w = +pW.value || 0, h = +pH.value || 0, r = +pR.value || 0;
+  if('cx' in o){ o.cx=x; o.cy=y; o.r=Math.max(4,r||o.r||24); }
+  else { o.x=x; o.y=y; if('w' in o) o.w=Math.max(4,w||o.w||10); if('h' in o) o.h=Math.max(4,h||o.h||10); }
+}
+
+function deleteSelected(){
+  if(!selected) return;
+  if(selected.kind==='platform') level.platforms.splice(selected.index,1);
+  if(selected.kind==='spike') level.spikes.splice(selected.index,1);
+  if(selected.kind==='laser') level.lasers.splice(selected.index,1);
+  if(selected.kind==='saw') level.saws.splice(selected.index,1);
+  selected = null;
+}
+
+function exportLevel(){
+  level.meta = level.meta || {};
+  level.meta.name = lvlName.value.trim() || 'custom-level';
+  level.meta.theme = cl(+lvlTheme.value||0,0,5);
+  level.width = Math.max(800,+lvlW.value||level.width);
+  level.height = Math.max(700,+lvlH.value||level.height);
+  const text = JSON.stringify(level,null,2);
+  const blob = new Blob([text],{type:'application/json'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = (level.meta.name||'level') + '.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+async function saveWithFS(){
+  if(!window.showSaveFilePicker){ exportLevel(); return; }
+  level.meta = level.meta || {};
+  level.meta.name = lvlName.value.trim() || 'custom-level';
+  const handle = await window.showSaveFilePicker({suggestedName:(level.meta.name||'level')+'.json',types:[{description:'JSON',accept:{'application/json':['.json']}}]});
+  const writable = await handle.createWritable();
+  await writable.write(JSON.stringify(level,null,2));
+  await writable.close();
+  fileHandle = handle;
+}
+
+function importLevel(obj){
+  level = obj;
+  level.meta = level.meta || {name:'custom-level',theme:0};
+  level.platforms = level.platforms || [];
+  level.spikes = level.spikes || [];
+  level.saws = level.saws || [];
+  level.lasers = level.lasers || [];
+  level.goal = level.goal || {x:600,y:500,w:64,h:84};
+  level.start = level.start || {x:120,y:500};
+  selected = null;
+  syncLevelFields();
+  cam.x = 0; cam.y = 0;
+}
+
+function draw(){
+  const t = themes[cl(level.meta?.theme||0,0,5)] || themes[0];
+  const g = cx.createLinearGradient(0,0,0,cv.height);
+  g.addColorStop(0,t.top); g.addColorStop(.55,t.mid); g.addColorStop(1,t.bot);
+  cx.fillStyle = g; cx.fillRect(0,0,cv.width,cv.height);
+
+  cx.strokeStyle='rgba(160,190,230,.16)';
+  cx.lineWidth=1;
+  const grid=100;
+  const startX = Math.floor(cam.x/grid)*grid;
+  const endX = cam.x + cv.width/cam.zoom;
+  for(let x=startX;x<endX;x+=grid){ const sx=(x-cam.x)*cam.zoom; cx.beginPath(); cx.moveTo(sx,0); cx.lineTo(sx,cv.height); cx.stroke(); }
+  const startY = Math.floor(cam.y/grid)*grid;
+  const endY = cam.y + cv.height/cam.zoom;
+  for(let y=startY;y<endY;y+=grid){ const sy=(y-cam.y)*cam.zoom; cx.beginPath(); cx.moveTo(0,sy); cx.lineTo(cv.width,sy); cx.stroke(); }
+
+  for(const p of level.platforms){ const s=worldToScreen(p.x,p.y); cx.fillStyle=p.type==='crumble'?'#9a8f66':'#4f647f'; cx.fillRect(s.x,s.y,p.w*cam.zoom,p.h*cam.zoom); }
+  for(const s0 of level.spikes){ const s=worldToScreen(s0.x,s0.y); cx.fillStyle='#b14949'; cx.fillRect(s.x,s.y,s0.w*cam.zoom,s0.h*cam.zoom); }
+  for(const l of level.lasers){ const s=worldToScreen(l.x,l.y); cx.fillStyle='rgba(255,95,95,.65)'; cx.fillRect(s.x,s.y,l.w*cam.zoom,l.h*cam.zoom); }
+  for(const s0 of level.saws){ const s=worldToScreen(s0.cx,s0.cy); cx.fillStyle='#d8e5fb'; cx.beginPath(); cx.arc(s.x,s.y,s0.r*cam.zoom,0,Math.PI*2); cx.fill(); }
+
+  const st=worldToScreen(level.start.x,level.start.y-92);
+  cx.fillStyle='#7fd8ff'; cx.fillRect(st.x,st.y,42*cam.zoom,92*cam.zoom);
+  const gl=worldToScreen(level.goal.x,level.goal.y);
+  cx.fillStyle='#9cd0ff'; cx.fillRect(gl.x,gl.y,level.goal.w*cam.zoom,level.goal.h*cam.zoom);
+
+  if(selected){
+    const o=getSelObj();
+    if(o){
+      cx.strokeStyle='#ffd77a'; cx.lineWidth=2;
+      if('cx' in o){const s=worldToScreen(o.cx,o.cy); cx.beginPath(); cx.arc(s.x,s.y,(o.r+3)*cam.zoom,0,Math.PI*2); cx.stroke();}
+      else {const s=worldToScreen(o.x,o.y); cx.strokeRect(s.x,s.y,(o.w||42)*cam.zoom,(o.h||92)*cam.zoom);}
+    }
+  }
+
+  syncSelFields();
+  statusEl.textContent = `Zoom ${cam.zoom.toFixed(2)} | Cam ${Math.round(cam.x)},${Math.round(cam.y)} | Plat ${level.platforms.length} | Spike ${level.spikes.length} | Saw ${level.saws.length} | Laser ${level.lasers.length}`;
+}
+
+cv.addEventListener('contextmenu',e=>e.preventDefault());
+cv.addEventListener('mousedown',e=>{
+  const w = screenToWorld(e.offsetX,e.offsetY);
+  lastMouse={x:e.offsetX,y:e.offsetY};
+  if(e.button===2){ panning=true; return; }
+  if(e.button!==0) return;
+  if(currentAdd){ addObject(currentAdd,w.x,w.y); currentAdd=null; return; }
+  const hit = objectAt(w.x,w.y);
+  selected = hit;
+  const o = getSelObj();
+  if(o){
+    dragging=true;
+    dragOff.x = w.x - (o.x ?? o.cx);
+    dragOff.y = w.y - (o.y ?? o.cy);
+  }
+});
+
+cv.addEventListener('mousemove',e=>{
+  const w = screenToWorld(e.offsetX,e.offsetY);
+  if(panning){ cam.x -= (e.offsetX-lastMouse.x)/cam.zoom; cam.y -= (e.offsetY-lastMouse.y)/cam.zoom; }
+  if(dragging){
+    const o = getSelObj();
+    if(o){
+      if('cx' in o){ o.cx = w.x-dragOff.x; o.cy = w.y-dragOff.y; }
+      else { o.x = w.x-dragOff.x; o.y = w.y-dragOff.y; }
+    }
+  }
+  lastMouse={x:e.offsetX,y:e.offsetY};
+});
+
+addEventListener('mouseup',()=>{ dragging=false; panning=false; });
+
+cv.addEventListener('wheel',e=>{
+  e.preventDefault();
+  const before = screenToWorld(e.offsetX,e.offsetY);
+  cam.zoom = cl(cam.zoom * (e.deltaY>0?0.92:1.08),0.2,2.2);
+  const after = screenToWorld(e.offsetX,e.offsetY);
+  cam.x += before.x-after.x;
+  cam.y += before.y-after.y;
+},{passive:false});
+
+document.querySelectorAll('[data-add]').forEach(b=>b.onclick=()=>currentAdd=b.dataset.add);
+document.getElementById('addGoal').onclick = ()=>currentAdd='goal';
+document.getElementById('applyBtn').onclick = applySelProps;
+document.getElementById('delBtn').onclick = deleteSelected;
+
+document.getElementById('newBtn').onclick = ()=>{ level=makeBlankLevel(); selected=null; syncLevelFields(); };
+document.getElementById('genBtn').onclick = ()=>{ level=genByIndex(+document.getElementById('genLevel').value||1); level.meta={name:'level-'+(document.getElementById('genLevel').value||1),theme:0}; selected=null; syncLevelFields(); };
+document.getElementById('saveBtn').onclick = exportLevel;
+document.getElementById('saveFsBtn').onclick = saveWithFS;
+document.getElementById('loadBtn').onclick = ()=>fileInput.click();
+
+fileInput.addEventListener('change',async e=>{
+  const f = e.target.files?.[0];
+  if(!f) return;
+  const txt = await f.text();
+  importLevel(JSON.parse(txt));
+  e.target.value='';
+});
+
+function tick(){ draw(); requestAnimationFrame(tick); }
+addEventListener('resize',resize);
+resize();
+syncLevelFields();
+tick();
+</script>
+</body>
+</html>

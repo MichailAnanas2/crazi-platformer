@@ -38,6 +38,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;touch-action:none;back
 .menu-btn{height:40px;width:100%;padding:0 16px;border-radius:3px;border:1px solid rgba(210,171,84,.74);font-size:13px;font-weight:900;color:#f7d890;background:linear-gradient(180deg,rgba(38,32,18,.86),rgba(19,16,10,.92));letter-spacing:.05em;text-align:left}
 .menu-btn.primary{color:#f7d890;border-color:rgba(210,171,84,.74);background:linear-gradient(180deg,rgba(38,32,18,.86),rgba(19,16,10,.92));box-shadow:none}
 .menu-btn.off{opacity:.74}
+.menu-select{height:40px;width:100%;padding:0 12px;border-radius:3px;border:1px solid rgba(210,171,84,.74);background:linear-gradient(180deg,rgba(20,18,14,.9),rgba(12,11,9,.94));color:#f7d890;font-size:12px;font-weight:700}
 @media (max-width:960px){#menu{grid-template-columns:1fr;padding:16px}#menu .panel{justify-self:center;width:min(100%,520px)}}
 @keyframes deathZoom{from{transform:scale(1)}to{transform:scale(1.09)}}
 @media (orientation:portrait){#rotate{display:grid}#game,#hud,#controls,#cheat,#msg,.overlay{filter:blur(2px) brightness(.7)}}
@@ -50,7 +51,8 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;touch-action:none;back
 <div id="msg"></div>
 <canvas id="game"></canvas>
 <div id="controls"><div class="pad"><button id="l" class="b">◀</button><button id="r" class="b">▶</button></div><div class="pad"><button id="j" class="b">J</button><button id="d" class="b">D</button></div></div>
-<div id="menu" class="overlay show"><div></div><div class="panel"><h1 id="menuTitle">GALACTIC TRIAL</h1><p id="menuSubtitle">Операция в глубоком космосе. 50 уровней, вертикальные штурмы и финальный прорыв налево.</p><p id="testReport">Pathfinder тест: не запускался</p><div class="menu-row"><button id="playBtn" class="menu-btn primary">ИГРАТЬ</button><button id="aiPlayBtn" class="menu-btn">ИИ ДЕМО</button><button id="menuSoundBtn" class="menu-btn">ЗВУК: ВКЛ</button></div></div></div>
+<div id="menu" class="overlay show"><div></div><div class="panel"><h1 id="menuTitle">GALACTIC TRIAL</h1><p id="menuSubtitle">Операция в глубоком космосе. 50 уровней, вертикальные штурмы и финальный прорыв налево.</p><p id="testReport">Pathfinder тест: не запускался</p><div class="menu-row"><button id="playBtn" class="menu-btn primary">ИГРАТЬ</button><button id="aiPlayBtn" class="menu-btn">ИИ ДЕМО</button><button id="menuSoundBtn" class="menu-btn">ЗВУК: ВКЛ</button></div><div class="menu-row"><button id="customLoadBtn" class="menu-btn">ЗАГРУЗИТЬ КАСТОМНЫЕ УРОВНИ</button><select id="customSelect" class="menu-select"><option value="">Нет загруженных</option></select><button id="customPlayBtn" class="menu-btn">ТЕСТ ВЫБРАННОГО УРОВНЯ</button></div></div></div>
+<input id="customFilesInput" type="file" accept=".json,application/json" multiple style="display:none" />
 <div id="win" class="overlay"><div class="panel"><h2>Все 50 уровней пройдены</h2><p id="res"></p><div class="menu-row"><button id="retry" class="menu-btn primary">ЕЩЕ РАЗ</button></div></div></div>
 <script src="assets/music/music-inline.js"></script>
 <script>
@@ -68,6 +70,10 @@ const homeBtn = document.getElementById('homeBtn');
 const musicBtn = document.getElementById('musicBtn');
 const menuSoundBtn = document.getElementById('menuSoundBtn');
 const testReportEl = document.getElementById('testReport');
+const customLoadBtn = document.getElementById('customLoadBtn');
+const customPlayBtn = document.getElementById('customPlayBtn');
+const customSelect = document.getElementById('customSelect');
+const customFilesInput = document.getElementById('customFilesInput');
 
 const LEVELS = 50;
 const BASE_H = 1700;
@@ -91,6 +97,9 @@ let levelLockUntil = 0;
 let dpr = 1;
 let bg = document.createElement('canvas');
 const ai = {enabled:false, route:null, step:0, stuck:0, lastX:0, lastY:0, jumpCd:0, tested:false, failed:[], memory:{}};
+let gameMode = 'campaign';
+let customLevels = [];
+let customIndex = 0;
 
 const themes = [
   {name:'Орбита Титана',top:'#020611',mid:'#0b1b36',bot:'#172e4b',neb:'#2c557f',planet:'#8eb8ff',sun:'#7fd3ff'},
@@ -463,6 +472,94 @@ function levelGen(i){
   return i === LEVELS-1 ? genReverseLevel(i) : genForwardLevel(i);
 }
 
+function hashStr(s){
+  let h = 2166136261;
+  for(let i=0;i<s.length;i++) h = (h ^ s.charCodeAt(i)) * 16777619;
+  return (h >>> 0) || 1;
+}
+
+function normalizeCustomLevel(raw, fallbackName){
+  const width = Math.max(800, Number(raw?.width) || 4800);
+  const height = Math.max(700, Number(raw?.height) || BASE_H);
+  const themeObj = (raw?.theme && typeof raw.theme === 'object' && raw.theme.top) ? raw.theme : null;
+  const themeIdx = cl(Number(raw?.meta?.theme ?? raw?.theme ?? 0), 0, themes.length - 1);
+  const name = String(raw?.meta?.name || fallbackName || 'custom-level');
+  const rr = rng(hashStr(name));
+  const stars = [];
+  for(let i=0;i<70;i++) stars.push({x:rr(),y:rr(),a:0.15+rr()*0.6,s:1+rr()*1.5});
+
+  const platforms = Array.isArray(raw?.platforms) ? raw.platforms.map((p)=>({
+    x:Number(p.x)||0,
+    y:Number(p.y)||0,
+    w:Math.max(20, Number(p.w)||120),
+    h:Math.max(8, Number(p.h)||22),
+    type:p.type==='crumble'?'crumble':'solid',
+    timer:0,
+    gone:false,
+    restore:0
+  })) : [];
+
+  const spikes = Array.isArray(raw?.spikes) ? raw.spikes.map((s)=>({
+    x:Number(s.x)||0,
+    y:Number(s.y)||0,
+    w:Math.max(20, Number(s.w)||60),
+    h:Math.max(8, Number(s.h)||18)
+  })) : [];
+
+  const saws = Array.isArray(raw?.saws) ? raw.saws.map((s)=>({
+    cx:Number(s.cx ?? s.x) || 0,
+    cy:Number(s.cy ?? s.y) || 0,
+    r:Math.max(8, Number(s.r)||22),
+    a:s.a==='y'?'y':'x',
+    amp:Math.max(10, Number(s.amp)||120),
+    sp:Math.max(0.1, Number(s.sp)||2.4),
+    ph:Number(s.ph)||0
+  })) : [];
+
+  const lasers = Array.isArray(raw?.lasers) ? raw.lasers.map((l)=>({
+    x:Number(l.x)||0,
+    y:Number(l.y)||0,
+    w:Math.max(6, Number(l.w)||16),
+    h:Math.max(20, Number(l.h)||220),
+    per:Math.max(0.2, Number(l.per)||1.2),
+    on:Math.max(0.05, Number(l.on)||0.6),
+    ph:Number(l.ph)||0
+  })) : [];
+
+  return {
+    width,
+    height,
+    start:{x:Number(raw?.start?.x)||120,y:Number(raw?.start?.y)||(height-370)},
+    goal:{x:Number(raw?.goal?.x)||(width-150),y:Number(raw?.goal?.y)||(height-340),w:Math.max(20,Number(raw?.goal?.w)||64),h:Math.max(20,Number(raw?.goal?.h)||84)},
+    platforms: platforms.length ? platforms : [{x:0,y:height-250,w:520,h:22,type:'solid',timer:0,gone:false,restore:0}],
+    spikes,
+    saws,
+    lasers,
+    stars,
+    theme: themeObj || themes[themeIdx],
+    mode:'custom',
+    customName:name
+  };
+}
+
+function refreshCustomSelect(){
+  customSelect.innerHTML = '';
+  if(!customLevels.length){
+    const o = document.createElement('option');
+    o.value = '';
+    o.textContent = 'Нет загруженных';
+    customSelect.appendChild(o);
+    return;
+  }
+  customLevels.forEach((lvl, idx)=>{
+    const o = document.createElement('option');
+    o.value = String(idx);
+    const name = lvl?.meta?.name || lvl?.customName || ('custom-'+(idx+1));
+    o.textContent = (idx+1) + '. ' + name;
+    customSelect.appendChild(o);
+  });
+}
+
 function findSupportPlatformIndex(data, x, yRef){
   let best = -1;
   let bestD = 1e9;
@@ -577,7 +674,12 @@ function resetAiRoute(){
 }
 
 function loadLevel(i, withTransition){
-  cur = levelGen(i);
+  if(gameMode === 'custom' && customLevels.length){
+    const src = customLevels[cl(customIndex,0,customLevels.length-1)];
+    cur = normalizeCustomLevel(src, src?.meta?.name || src?.customName || 'custom-level');
+  } else {
+    cur = levelGen(i);
+  }
   p.x = cur.start.x;
   p.y = cur.start.y;
   p.vx = 0;
@@ -588,14 +690,14 @@ function loadLevel(i, withTransition){
   p.ds = 0;
   buildSky();
   if(ai.enabled) resetAiRoute();
-  levelEl.textContent = 'Уровень ' + (i+1) + '/' + LEVELS;
+  levelEl.textContent = gameMode === 'custom' ? ('Кастом: ' + (cur.customName || ('#'+(customIndex+1)))) : ('Уровень ' + (i+1) + '/' + LEVELS);
   if(withTransition){
     levelLockUntil = performance.now() + 900;
-    showMsg('ПЕРЕХОД НА УРОВЕНЬ ' + (i+1), 950);
+    showMsg(gameMode === 'custom' ? 'ПЕРЕЗАПУСК КАСТОМНОГО' : ('ПЕРЕХОД НА УРОВЕНЬ ' + (i+1)), 950);
   }
   setTimeout(() => {
-    const modeText = cur.mode === 'vertical' ? 'ВЕРТИКАЛЬНЫЙ ПОДЪЕМ' : cur.mode === 'reverse' ? 'ИДИ НАЛЕВО' : cur.theme.name;
-    showMsg('УРОВЕНЬ ' + (i+1) + ': ' + modeText, 1900);
+    const modeText = cur.mode === 'custom' ? (cur.customName || 'Кастомный уровень') : (cur.mode === 'vertical' ? 'ВЕРТИКАЛЬНЫЙ ПОДЪЕМ' : cur.mode === 'reverse' ? 'ИДИ НАЛЕВО' : cur.theme.name);
+    showMsg((gameMode === 'custom' ? 'ТЕСТ: ' : ('УРОВЕНЬ ' + (i+1) + ': ')) + modeText, 1900);
   }, withTransition ? 420 : 0);
 }
 
@@ -617,7 +719,7 @@ function die(){
 function beginRun(resetStats, watchAi){
   if(resetStats){
     deaths = 0;
-    level = 0;
+    if(gameMode === 'campaign') level = 0;
   }
   ai.enabled = !!watchAi;
   inp.l = false;
@@ -662,14 +764,54 @@ addEventListener('resize',resize);
 document.getElementById('retry').onclick = () => beginRun(true, ai.enabled);
 document.getElementById('playBtn').onclick = () => {
   audioOn();
+  gameMode = 'campaign';
   beginRun(true, false);
   menu.classList.remove('show');
 };
 document.getElementById('aiPlayBtn').onclick = () => {
   audioOn();
+  gameMode = 'campaign';
   runPathfinderTests();
   beginRun(true, true);
   showMsg('ДЕМО РЕЖИМ: ИИ ИГРАЕТ', 1700);
+  menu.classList.remove('show');
+};
+
+customLoadBtn.onclick = () => customFilesInput.click();
+customFilesInput.onchange = async (ev) => {
+  const files = Array.from(ev.target.files || []);
+  if(!files.length) return;
+  const loaded = [];
+  for(const f of files){
+    try{
+      const text = await f.text();
+      const parsed = JSON.parse(text);
+      parsed.meta = parsed.meta || {};
+      if(!parsed.meta.name) parsed.meta.name = f.name.replace(/\.json$/i,'');
+      loaded.push(parsed);
+    }catch{}
+  }
+  if(loaded.length){
+    customLevels = loaded;
+    customIndex = 0;
+    refreshCustomSelect();
+    testReportEl.textContent = 'Кастомные уровни: загружено ' + loaded.length;
+    showMsg('Загружено кастомных уровней: ' + loaded.length, 1700);
+  } else {
+    showMsg('Не удалось прочитать JSON уровни', 1700);
+  }
+  customFilesInput.value = '';
+};
+
+customPlayBtn.onclick = () => {
+  if(!customLevels.length){
+    showMsg('Сначала загрузи JSON уровни', 1500);
+    return;
+  }
+  audioOn();
+  gameMode = 'custom';
+  customIndex = cl(parseInt(customSelect.value || '0', 10), 0, customLevels.length - 1);
+  beginRun(true, false);
   menu.classList.remove('show');
 };
 
@@ -992,7 +1134,7 @@ function update(dt, et){
 
   if(hit(p, cur.goal)){
     if(ai.enabled) aiLearnFromSuccess();
-    if(level < LEVELS-1){
+    if(gameMode === 'campaign' && level < LEVELS-1){
       level++;
       loadLevel(level, true);
       return;
@@ -1180,6 +1322,7 @@ function draw(et){
 
 let prev = performance.now();
 resize();
+refreshCustomSelect();
 loadLevel(0,false);
 runPathfinderTests();
 
