@@ -26,7 +26,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;touch-action:none;back
 .panel{min-width:min(92vw,620px);padding:26px 24px;border-radius:16px;background:linear-gradient(155deg,rgba(9,17,30,.95),rgba(18,29,44,.92));border:1px solid rgba(188,224,255,.3);text-align:center}
 .panel h1,.panel h2{margin:0 0 10px}
 .panel p{margin:0 0 14px;opacity:.9}
-#menu{z-index:45;grid-template-columns:minmax(280px,1fr) minmax(340px,460px);gap:24px;align-items:center;padding:28px;background-image:radial-gradient(circle at 22% 24%,rgba(62,103,170,.28) 0%,rgba(16,38,84,.08) 36%,rgba(4,11,24,.92) 100%),url('assets/ui/deathstar-user.png'),url('assets/ui/deathstar-menu.svg');background-position:center,center,center;background-size:cover,cover,cover;background-repeat:no-repeat,no-repeat,no-repeat}
+#menu{z-index:45;grid-template-columns:minmax(280px,1fr) minmax(340px,460px);gap:24px;align-items:center;padding:28px;background-image:radial-gradient(circle at 22% 24%,rgba(62,103,170,.28) 0%,rgba(16,38,84,.08) 36%,rgba(4,11,24,.92) 100%),url('assets/ui/zv.png'),url('assets/ui/deathstar-menu.svg');background-position:center,center,center;background-size:cover,cover,cover;background-repeat:no-repeat,no-repeat,no-repeat}
 #menu .panel{justify-self:end;width:min(100%,460px);padding:18px 20px;border-radius:10px;background:linear-gradient(180deg,rgba(8,10,14,.78),rgba(5,8,12,.82));border:1px solid rgba(213,171,87,.75);box-shadow:0 0 26px rgba(0,0,0,.55),inset 0 0 0 1px rgba(229,208,146,.16);text-align:left}
 #menuTitle{font-size:42px;letter-spacing:.08em;line-height:1;color:#e8edf8;text-shadow:0 2px 12px rgba(0,0,0,.5)}
 #menuSubtitle{font-size:13px;color:#d9e8ff;opacity:.9;line-height:1.45}
@@ -110,18 +110,18 @@ let shipSheetReady = false;
 let robotSheetReady = false;
 shipSheet.onload = () => shipSheetReady = true;
 robotSheet.onload = () => robotSheetReady = true;
-shipSheet.src = 'assets/ui/ships-user.png';
-robotSheet.src = 'assets/ui/robots-user.png';
+shipSheet.src = 'assets/ui/kr.png';
+robotSheet.src = 'assets/ui/rb.png';
 
 const SHIP_FRAMES = [
-  {x:20,y:40,w:500,h:430},
-  {x:530,y:80,w:430,h:350},
-  {x:160,y:470,w:700,h:480}
+  {x:40,y:100,w:500,h:340},
+  {x:540,y:110,w:430,h:300},
+  {x:150,y:500,w:730,h:430}
 ];
 const ROBOT_FRAMES = [
-  {x:20,y:270,w:280,h:650},
-  {x:300,y:220,w:430,h:760},
-  {x:700,y:260,w:300,h:620}
+  {x:40,y:260,w:280,h:660},
+  {x:300,y:210,w:430,h:770},
+  {x:700,y:300,w:300,h:630}
 ];
 
 const cl = (v,a,b) => Math.max(a,Math.min(b,v));
@@ -1004,8 +1004,8 @@ function drawShip(x,y,s,alpha){
   if(shipSheetReady){
     const idx = Math.abs(Math.floor((x + y) / 37)) % SHIP_FRAMES.length;
     const f = SHIP_FRAMES[idx];
-    const dw = f.w * 0.42 * s;
-    const dh = f.h * 0.42 * s;
+    const dw = f.w * 0.34 * s;
+    const dh = f.h * 0.34 * s;
     cx.save();
     cx.globalAlpha = alpha;
     cx.drawImage(shipSheet,f.x,f.y,f.w,f.h,x-dw*0.48,y-dh*0.45,dw,dh);
@@ -1038,8 +1038,8 @@ function drawWalker(x,y,scale){
   if(robotSheetReady){
     const idx = Math.abs(Math.floor((x + y) / 43)) % ROBOT_FRAMES.length;
     const f = ROBOT_FRAMES[idx];
-    const dw = f.w * 0.24 * scale;
-    const dh = f.h * 0.24 * scale;
+    const dw = f.w * 0.22 * scale;
+    const dh = f.h * 0.22 * scale;
     cx.save();
     cx.globalAlpha = 0.78;
     cx.drawImage(robotSheet,f.x,f.y,f.w,f.h,x-dw*0.5,y-dh,dw,dh);
